@@ -1,0 +1,223 @@
+--// FireHub by DypzDev (Key System REMOVIDO)
+local success, Starlight = pcall(function()
+    return loadstring(game:HttpGet("https://raw.nebulasoftworks.xyz/starlight"))()
+end)
+if not success or not Starlight then return end
+
+-- ÍCONES (com fallback seguro)
+local NebulaIcons = { GetIcon = function() return nil end }
+pcall(function()
+    local src = game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Icons/main/NeonIcons.lua")
+    if src and #src > 500 then
+        local func = loadstring(src)
+        if func then NebulaIcons = func() end
+    end
+end)
+
+-- Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+
+-- Variáveis
+local autoOpen = false
+local openDelay = 100
+local autoClick = false
+local clickDelay = 50
+local autoRank = false
+local rankDelay = 500
+local autoLeave = false
+local leaveWave = 10
+local jaExecutou = false
+
+-- Funções Remotas
+local function doAutoOpen()
+    pcall(function() ReplicatedStorage.Reply.Reliable:FireServer("Gacha Multi") end)
+end
+
+local function doAutoClick()
+    pcall(function() ReplicatedStorage.Reply.Unreliable:FireServer("Hit") end)
+end
+
+local function doAutoRank()
+    pcall(function() ReplicatedStorage.Reply.Reliable:FireServer("RankUp") end)
+end
+
+local function getWaveAtual()
+    local gui = player:WaitForChild("PlayerGui", 10)
+    if not gui then return nil end
+    local ok, txt = pcall(function() return gui.Screen.Hud.gamemode.Raid.wave.amount.Text end)
+    return ok and tonumber(txt) or nil
+end
+
+local function deixarRaid()
+    Starlight:Notification({
+        Title = "Auto Leave",
+        Content = "Saindo da raid na wave " .. leaveWave,
+        Icon = NebulaIcons:GetIcon('log-out', 'Lucide')
+    }, "LeaveNotif")
+    ReplicatedStorage.Reply.Reliable:FireServer("Zone Teleport", {"Dungeon"})
+    task.wait(2)
+    ReplicatedStorage.Reply.Reliable:FireServer("Join Gamemode", {"Raid:1"})
+end
+
+-- UI PRINCIPAL (sem key)
+local Window = Starlight:CreateWindow({
+    Name = "FireHub",
+    Subtitle = "By DypzDev",
+    LoadingEnabled = true,
+    LoadingTitle = "FireHub",
+    LoadingSubtitle = "Carregando..."
+})
+
+local TabSection = Window:CreateTabSection("Main")
+
+-- MAIN TAB
+local MainTab = TabSection:CreateTab({Name = "Main", Columns = 2}, "MainTab")
+local MainGB = MainTab:CreateGroupbox({Name = "Auto", Icon = NebulaIcons:GetIcon('zap', 'Lucide')}, "MainGB")
+
+MainGB:CreateToggle({
+    Name = "Auto Click",
+    CurrentValue = false,
+    Icon = NebulaIcons:GetIcon('mouse-pointer-click', 'Lucide'),
+    Callback = function(v) autoClick = v end
+}, "AClick")
+
+MainGB:CreateSlider({
+    Name = "Delay (ms)",
+    Range = {1, 200},
+    Increment = 1,
+    CurrentValue = clickDelay,
+    Icon = NebulaIcons:GetIcon('clock', 'Lucide'),
+    Callback = function(v) clickDelay = v end
+}, "CDelay")
+
+MainGB:CreateToggle({
+    Name = "Auto Rank",
+    CurrentValue = false,
+    Icon = NebulaIcons:GetIcon('trending-up', 'Lucide'),
+    Callback = function(v) autoRank = v end
+}, "ARank")
+
+-- STAR TAB
+local StarTab = TabSection:CreateTab({Name = "Star", Columns = 2}, "StarTab")
+local StarGB = StarTab:CreateGroupbox({Name = "Gacha", Icon = NebulaIcons:GetIcon('dice-6', 'Lucide')}, "StarGB")
+
+StarGB:CreateToggle({
+    Name = "Auto Multi",
+    CurrentValue = false,
+    Icon = NebulaIcons:GetIcon('refresh-cw', 'Lucide'),
+    Callback = function(v) autoOpen = v end
+}, "AMulti")
+
+StarGB:CreateSlider({
+    Name = "Delay (ms)",
+    Range = {1, 1000},
+    Increment = 1,
+    CurrentValue = openDelay,
+    Icon = NebulaIcons:GetIcon('timer', 'Lucide'),
+    Callback = function(v) openDelay = v end
+}, "MDelay")
+
+-- RAID TAB
+local RaidTab = TabSection:CreateTab({Name = "Raid", Columns = 2}, "RaidTab")
+local RaidGB = RaidTab:CreateGroupbox({Name = "Auto Leave", Icon = NebulaIcons:GetIcon('door-open', 'Lucide')}, "RaidGB")
+
+RaidGB:CreateToggle({
+    Name = "Auto Leave",
+    CurrentValue = false,
+    Icon = NebulaIcons:GetIcon('log-out', 'Lucide'),
+    Callback = function(v)
+        autoLeave = v
+        if v then
+            Starlight:Notification({Title = "Ativado", Content = "Sairá na wave: " .. leaveWave}, "LeaveON")
+        end
+    end
+}, "ALeave")
+
+-- INPUT PARA WAVE (0-500)
+RaidGB:CreateInput({
+    Name = "Wave para Sair",
+    Icon = NebulaIcons:GetIcon('hash', 'Lucide'),
+    CurrentValue = tostring(leaveWave),
+    PlaceholderText = "0-500",
+    Numeric = true,
+    Enter = true,
+    MaxCharacters = 3,
+    Callback = function(text)
+        local n = tonumber(text)
+        if n and n >= 0 and n <= 500 then
+            leaveWave = n
+            Starlight:Notification({Title = "Salvo", Content = "Wave: " .. n}, "WaveOK")
+        else
+            Starlight:Notification({Title = "Erro", Content = "0 a 500!", Icon = NebulaIcons:GetIcon('alert-circle', 'Lucide')}, "WaveErr")
+        end
+    end
+}, "WaveInput")
+
+local WaveLabel = RaidGB:CreateParagraph({
+    Name = "Status",
+    Content = "Wave atual: --",
+    Icon = NebulaIcons:GetIcon('radio', 'Lucide')
+}, "WaveStatus")
+
+-- EQUIP TAB
+local EquipTab = TabSection:CreateTab({Name = "Equip", Columns = 2}, "EquipTab")
+local EquipGB = EquipTab:CreateGroupbox({Name = "Fruit", Icon = NebulaIcons:GetIcon('apple', 'Lucide')}, "EquipGB")
+
+local FruitLabel = EquipGB:CreateLabel({Name = "Fruta"}, "FLab")
+
+local fruits = {["Dmg (Legendary)"] = "5", ["Power (Mythical)"] = "6", ["Dmg (Secret)"] = "7"}
+local opts = {}
+for k in pairs(fruits) do table.insert(opts, k) end
+
+FruitLabel:AddDropdown({
+    Options = opts,
+    CurrentOption = {},
+    Placeholder = "Selecione",
+    Callback = function(sel)
+        local name = sel[1]
+        if name and fruits[name] then
+            ReplicatedStorage.Reply.Reliable:FireServer("Vault Equip", {fruits[name], "Fruits"})
+            Starlight:Notification({Title = "Equipado", Content = name}, "Eq" .. name)
+        end
+    end
+}, "FruitDD")
+
+-- LOOPS
+task.spawn(function()
+    while task.wait(clickDelay / 1000) do
+        if autoClick then doAutoClick() end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(rankDelay / 1000) do
+        if autoRank then doAutoRank() end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(openDelay / 1000) do
+        if autoOpen then doAutoOpen() end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(1) do
+        if autoLeave then
+            local w = getWaveAtual()
+            if w then
+                WaveLabel:Set({Content = "Wave atual: " .. w})
+                if w >= leaveWave and not jaExecutou then
+                    deixarRaid()
+                    jaExecutou = true
+                    task.wait(10)
+                    jaExecutou = false
+                end
+            else
+                WaveLabel:Set({Content = "Wave atual: --"})
+            end
+        end
+    end
+end)
